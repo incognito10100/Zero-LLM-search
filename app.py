@@ -1,22 +1,31 @@
 import json
+import requests
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from qdrant_client import QdrantClient, models
-from sentence_transformers import SentenceTransformer
 
 app = FastAPI()
 
-# Enable CORS so your GitHub Pages frontend website can talk to this API safely
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows requests from your GitHub Pages deployment
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Initialize models and DB in system RAM
-encoder = SentenceTransformer("BAAI/bge-small-en-v1.5")
+# Configuration for Hugging Face's Free Serverless API
+# ⚠️ PASTE YOUR HUGGING FACE TOKEN HERE (e.g., "hf_abcdef...")
+HF_TOKEN = "YOUR_HUGGING_FACE_TOKEN"
+API_URL = "https://huggingface.co"
+headers = {"Authorization": f"Bearer {HF_TOKEN}"}
+
+# Helper function to get vectors without using local RAM
+def get_embeddings(texts: list):
+    response = requests.post(API_URL, headers=headers, json={"inputs": texts})
+    return response.json()
+
+# Initialize Qdrant in system RAM
 client = QdrantClient(location=":memory:")
 COLLECTION_NAME = "enterprise_docs"
 
@@ -35,9 +44,13 @@ async def upload_data(file: UploadFile = File(...)):
         metadata_payload = [{"category": item.get("category", "general"), "document": item["text"]} for item in data]
         generated_ids = list(range(1, len(documents) + 1))
         
-        embeddings = encoder.encode(documents)
-        vector_lists = [v.tolist() for v in embeddings]
+        # Call Hugging Face API to get the embeddings (RAM stays at zero!)
+        vector_lists = get_embeddings(documents)
         
+        # If the API returned an error dictionary instead of a list
+        if isinstance(vector_lists, dict) and "error" in vector_lists:
+            return {"status": "error", "message": f"HF API Error: {vector_lists['error']}"}
+
         client.upload_collection(
             collection_name=COLLECTION_NAME,
             vectors=vector_lists,
@@ -57,7 +70,10 @@ async def search_data(query: str, category: str = "All Categories"):
         )
     
     try:
-        query_vector = encoder.encode(query).tolist()
+        # Get query vector from Hugging Face API
+        query_vector_res = get_embeddings([query])
+        query_vector = query_vector_res[0]
+        
         search_result = client.query_points(
             collection_name=COLLECTION_NAME,
             query=query_vector,

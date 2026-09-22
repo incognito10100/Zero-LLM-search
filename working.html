@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Zero-LLM Search</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,380;9..144,560&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+
+  :root {
+    --bg: #0b0d0e;
+    --surface: #121516;
+    --surface-2: #171b1c;
+    --border: #262b2c;
+    --text: #f1efe8;
+    --muted: #98a19c;
+    --subtle: #5e6664;
+    --accent: #5cb8a4;
+    --accent-dim: rgba(92, 184, 164, 0.12);
+    --amber: #d3a15a;
+    --amber-dim: rgba(211, 161, 90, 0.10);
+    --result-text: #cfd3ce;
+    --btn-ink: #0b0d0e;
+    --serif: 'Fraunces', Georgia, serif;
+    --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  :root[data-theme="light"] {
+    --bg: #f7f5ef;
+    --surface: #ffffff;
+    --surface-2: #f0eee6;
+    --border: #ddd8ca;
+    --text: #1c1e1a;
+    --muted: #5b6259;
+    --subtle: #8b9088;
+    --accent: #2f8877;
+    --accent-dim: rgba(47, 136, 119, 0.10);
+    --amber: #a9772c;
+    --amber-dim: rgba(169, 119, 44, 0.10);
+    --result-text: #3a3d38;
+    --btn-ink: #f7f5ef;
+  }
+
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+
+  body {
+    margin: 0;
+    min-height: 100%;
+    background: var(--bg);
+    background-image:
+      radial-gradient(circle, var(--accent-dim) 1px, transparent 1px);
+    background-size: 26px 26px;
+    background-position: -6px -6px;
+    color: var(--text);
+    font-family: var(--sans);
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  .theme-toggle {
+    width: auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 7px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--muted);
+  }
+
+  .theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
+  .theme-toggle svg { width: 15px; height: 15px; display: block; }
+  .theme-toggle .sun { display: none; }
+  :root[data-theme="light"] .theme-toggle .moon { display: none; }
+  :root[data-theme="light"] .theme-toggle .sun { display: block; }
+
+  /* ---------- NAVBAR ---------- */
+  nav {
+    height: 64px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 40px;
+    background: rgba(11, 13, 14, 0.86);
+    backdrop-filter: blur(14px);
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    z-index: 10;
+  }
+
+  .brand {
+    display: flex;
+    align-items: baseline;
+    gap: 9px;
+    font-family: var(--serif);
+    font-size: 18px;
+    font-weight: 560;
+    letter-spacing: -0.01em;
+  }
+
+  .brand em {
+    font-style: normal;
+    color: var(--subtle);
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .system-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--subtle);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 10px rgba(92, 184, 164, 0.7);
+  }
+
+  /* ---------- MAIN ---------- */
+  main {
+    max-width: 1140px;
+    margin: 0 auto;
+    padding: 76px 24px 100px;
+  }
+
+  .hero {
+    max-width: 640px;
+    margin-bottom: 58px;
+  }
+
+  .hero-label {
+    color: var(--accent);
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 18px;
+  }
+
+  h1 {
+    font-family: var(--serif);
+    font-size: clamp(40px, 5.4vw, 62px);
+    line-height: 1.02;
+    letter-spacing: -0.02em;
+    font-weight: 380;
+    margin: 0 0 22px;
+    color: var(--text);
+  }
+
+  h1 em {
+    font-style: italic;
+    color: var(--accent);
+  }
+
+  .hero p {
+    color: var(--muted);
+    font-size: 16px;
+    line-height: 1.7;
+    max-width: 520px;
+    margin: 0;
+  }
+
+  /* ---------- LAYOUT ---------- */
+  .workspace {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 18px;
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  .panel-header {
+    padding: 18px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .panel-title {
+    font-family: var(--serif);
+    font-size: 16px;
+    font-weight: 560;
+  }
+
+  .panel-body { padding: 20px; }
+
+  /* ---------- UPLOAD ---------- */
+  .upload-zone {
+    display: block;
+    border: 1px dashed #2c3232;
+    border-radius: 8px;
+    padding: 28px 18px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background 0.2s ease;
+    background: var(--bg);
+  }
+
+  .upload-zone:hover {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+  }
+
+  .upload-title {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 5px;
+  }
+
+  .upload-subtitle {
+    color: var(--subtle);
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  #jsonFile { display: none; }
+
+  .file-name {
+    margin-top: 12px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    min-height: 15px;
+    word-break: break-all;
+  }
+
+  button {
+    border: 0;
+    border-radius: 7px;
+    padding: 11px 14px;
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.15s ease, background 0.15s ease;
+  }
+
+  .primary-button {
+    width: 100%;
+    margin-top: 16px;
+    color: var(--btn-ink);
+    background: var(--accent);
+  }
+
+  .primary-button:hover { transform: translateY(-1px); }
+  .primary-button:focus-visible,
+  .search-button:focus-visible,
+  .upload-zone:focus-visible,
+  input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .status {
+    margin-top: 14px;
+    padding: 12px;
+    border-radius: 7px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 11.5px;
+    line-height: 1.55;
+  }
+
+  /* ---------- SEARCH ---------- */
+  .search-area { padding: 20px; }
+
+  .search-box {
+    border: 1px solid var(--border);
+    background: var(--bg);
+    border-radius: 9px;
+    padding: 4px;
+    display: flex;
+    gap: 4px;
+    margin-bottom: 12px;
+  }
+
+  .search-box input {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--text);
+    padding: 12px;
+    font-size: 14px;
+    font-family: var(--sans);
+  }
+
+  .search-box input::placeholder { color: var(--subtle); }
+
+  .search-button {
+    width: auto;
+    padding: 0 20px;
+    background: var(--text);
+    color: var(--bg);
+  }
+
+  .search-button:hover { opacity: 0.85; }
+
+  .filter-row { margin-bottom: 24px; }
+
+  .filter-input {
+    width: 100%;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text);
+    border-radius: 7px;
+    padding: 10px 12px;
+    outline: none;
+    font-size: 12.5px;
+    font-family: var(--sans);
+  }
+
+  .filter-input:focus { border-color: var(--accent); }
+
+  /* ---------- RESULTS ---------- */
+  .results-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+
+  .results-title {
+    font-family: var(--serif);
+    font-size: 15px;
+    color: var(--text);
+  }
+
+  .result-count {
+    color: var(--subtle);
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+
+  .empty-state {
+    border: 1px dashed var(--border);
+    border-radius: 9px;
+    padding: 50px 20px;
+    text-align: center;
+    color: var(--subtle);
+  }
+
+  .empty-state p { margin: 0; font-size: 12.5px; }
+
+  .result-item {
+    padding: 17px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 10px;
+    background: var(--bg);
+    transition: border-color 0.2s;
+  }
+
+  .result-item:hover { border-color: #37403e; }
+
+  .result-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .badge {
+    padding: 3px 8px;
+    border-radius: 5px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .high-match {
+    background: var(--accent-dim);
+    color: var(--accent);
+    border: 1px solid rgba(92, 184, 164, 0.2);
+  }
+
+  .mod-match {
+    background: var(--amber-dim);
+    color: var(--amber);
+    border: 1px solid rgba(211, 161, 90, 0.2);
+  }
+
+  .score {
+    color: var(--subtle);
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+
+  .category {
+    margin-left: auto;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .result-text {
+    color: var(--result-text);
+    font-size: 13.5px;
+    line-height: 1.65;
+    margin: 0;
+  }
+
+  /* ---------- FOOTER INFO ---------- */
+  .architecture {
+    margin-top: 20px;
+    padding: 16px 20px;
+    border-top: 1px solid var(--border);
+    color: var(--subtle);
+    font-family: var(--mono);
+    font-size: 11px;
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+  }
+
+  /* ---------- RESPONSIVE ---------- */
+  @media (max-width: 800px) {
+    nav { padding: 0 20px; }
+    .status-dot, .status-text { display: none; }
+    main { padding-top: 48px; }
+    .workspace { grid-template-columns: 1fr; }
+  }
+
+  @media (max-width: 520px) {
+    .search-box { flex-direction: column; padding: 5px; }
+    .search-button { width: 100%; padding: 11px; }
+    .architecture { flex-direction: column; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="brand">∿ Zero-LLM <em>/ Search</em></div>
+  <div class="system-status">
+    <div class="status-dot"></div>
+    <span class="status-text">Local semantic engine</span>
+    <button class="theme-toggle" id="themeToggle" aria-label="Toggle light and dark mode" type="button">
+      <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+      <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+    </button>
+  </div>
+</nav>
+
+<main>
+
+  <section class="hero">
+    <div class="hero-label">Vector retrieval, no generation step</div>
+    <h1>Search by <em>meaning</em>,<br>not keywords.</h1>
+    <p>
+      Upload a knowledge base, embed it into vector space, and retrieve
+      by intent — nothing gets rewritten or summarized by a language model
+      along the way.
+    </p>
+  </section>
+
+  <section class="workspace">
+
+    <!-- KNOWLEDGE BASE -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">Knowledge base</div>
+      </div>
+      <div class="panel-body">
+        <label class="upload-zone" for="jsonFile" tabindex="0">
+          <div class="upload-title">Upload dataset</div>
+          <div class="upload-subtitle">JSON file containing<br>your searchable documents</div>
+          <div id="fileName" class="file-name"></div>
+        </label>
+        <input type="file" id="jsonFile" accept=".json">
+        <button class="primary-button" onclick="uploadDataset()">Build vector index</button>
+        <div id="statusOutput" class="status">System ready. Awaiting dataset.</div>
+      </div>
+    </div>
+
+    <!-- SEARCH -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">Semantic retrieval</div>
+      </div>
+      <div class="search-area">
+        <div class="search-box">
+          <input type="text" id="queryInput" placeholder="Describe what you're looking for…" onkeydown="handleEnter(event)">
+          <button class="search-button" onclick="executeSearch()">Search</button>
+        </div>
+
+        <div class="filter-row">
+          <input class="filter-input" type="text" id="categoryInput" placeholder="Optional category filter" onkeydown="handleEnter(event)">
+        </div>
+
+        <div class="results-header">
+          <div class="results-title">Retrieved documents</div>
+          <div class="result-count" id="resultCount">0 results</div>
+        </div>
+
+        <div id="resultsWrapper">
+          <div class="empty-state">
+            <p>Your semantic results will appear here.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+  <div class="architecture">
+    <span>BGE-small-en-v1.5 → 384D vectors → Qdrant</span>
+    <span>No LLM generation layer</span>
+  </div>
+
+</main>
+
+<script>
+  const API_BASE_URL = "http://127.0.0.1:8000";
+
+  (function initTheme() {
+    let saved = null;
+    try { saved = localStorage.getItem("zllm-theme"); } catch (e) {}
+    const prefersLight = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches;
+    const theme = saved || (prefersLight ? "light" : "dark");
+    document.documentElement.setAttribute("data-theme", theme);
+  })();
+
+  document.getElementById("themeToggle").addEventListener("click", function () {
+    const current = document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+    const next = current === "light" ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", next);
+    try { localStorage.setItem("zllm-theme", next); } catch (e) {}
+  });
+
+  document.getElementById("jsonFile").addEventListener("change", function () {
+    const fileName = document.getElementById("fileName");
+    fileName.innerText = this.files.length > 0 ? this.files[0].name : "";
+  });
+
+  async function uploadDataset() {
+    const fileInput = document.getElementById("jsonFile");
+    const statusBox = document.getElementById("statusOutput");
+
+    if (!fileInput.files[0]) {
+      statusBox.innerText = "Please select a JSON dataset first.";
+      return;
+    }
+
+    statusBox.innerText = "Generating embeddings and building vector index...";
+
+    const formData = new FormData();
+    formData.append("file", fileInput.files[0]);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/upload`, { method: "POST", body: formData });
+      const data = await response.json();
+      statusBox.innerText = data.message || "Indexing complete.";
+    } catch (error) {
+      statusBox.innerText = `Connection error: ${error.message}`;
+    }
+  }
+
+  async function executeSearch() {
+    const query = document.getElementById("queryInput").value.trim();
+    const category = document.getElementById("categoryInput").value.trim() || "All Categories";
+    const resultsWrapper = document.getElementById("resultsWrapper");
+    const resultCount = document.getElementById("resultCount");
+
+    if (!query) return;
+
+    resultsWrapper.innerHTML = `<div class="empty-state"><p>Searching semantic index…</p></div>`;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/search?query=${encodeURIComponent(query)}&category=${encodeURIComponent(category)}`);
+      const data = await response.json();
+
+      if (data.status === "error" || !data.results || data.results.length === 0) {
+        resultCount.innerText = "0 results";
+        resultsWrapper.innerHTML = `<div class="empty-state"><p>No semantically similar documents found.</p></div>`;
+        return;
+      }
+
+      resultCount.innerText = `${data.results.length} results`;
+
+      let htmlContent = "";
+      data.results.forEach((hit) => {
+        const isHigh = hit.score > 0.8;
+        const matchClass = isHigh ? "high-match" : "mod-match";
+        const matchText = isHigh ? "High similarity" : "Moderate similarity";
+
+        htmlContent += `
+          <div class="result-item">
+            <div class="result-meta">
+              <span class="badge ${matchClass}">${matchText}</span>
+              <span class="score">similarity ${hit.score}</span>
+              <span class="category">${escapeHtml(hit.category)}</span>
+            </div>
+            <p class="result-text">${escapeHtml(hit.text)}</p>
+          </div>
+        `;
+      });
+
+      resultsWrapper.innerHTML = htmlContent;
+    } catch (error) {
+      resultCount.innerText = "Error";
+      resultsWrapper.innerHTML = `<div class="empty-state"><p>Unable to connect to the semantic search API.</p></div>`;
+    }
+  }
+
+  function handleEnter(event) {
+    if (event.key === "Enter") executeSearch();
+  }
+
+  function escapeHtml(value) {
+    return String(value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+</script>
+
+</body>
+</html>

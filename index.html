@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Zero-LLM Search — retrieval without generation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,380;9..144,460;9..144,560&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+
+  :root {
+    --bg: #0b0d0e;
+    --surface: #121516;
+    --border: #262b2c;
+    --text: #f1efe8;
+    --muted: #98a19c;
+    --subtle: #5e6664;
+    --accent: #5cb8a4;
+    --accent-dim: rgba(92, 184, 164, 0.12);
+    --btn-ink: #0b0d0e;
+    --serif: 'Fraunces', Georgia, serif;
+    --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  :root[data-theme="light"] {
+    --bg: #f7f5ef;
+    --surface: #ffffff;
+    --border: #ddd8ca;
+    --text: #1c1e1a;
+    --muted: #5b6259;
+    --subtle: #8b9088;
+    --accent: #2f8877;
+    --accent-dim: rgba(47, 136, 119, 0.10);
+    --btn-ink: #f7f5ef;
+  }
+
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    background-image: radial-gradient(circle, var(--accent-dim) 1px, transparent 1px);
+    background-size: 26px 26px;
+    background-position: -6px -6px;
+    color: var(--text);
+    font-family: var(--sans);
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  nav {
+    height: 64px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 40px;
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    background: rgba(11, 13, 14, 0.7);
+    backdrop-filter: blur(14px);
+  }
+
+  :root[data-theme="light"] nav { background: rgba(247, 245, 239, 0.75); }
+
+  .brand { font-family: var(--serif); font-size: 18px; font-weight: 560; letter-spacing: -0.01em; }
+  .brand em { font-style: normal; color: var(--subtle); font-family: var(--sans); font-size: 13px; font-weight: 500; }
+
+  .nav-right { display: flex; align-items: center; gap: 14px; }
+
+  .theme-toggle {
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 7px; border-radius: 7px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--muted); cursor: pointer;
+  }
+  .theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
+  .theme-toggle svg { width: 15px; height: 15px; display: block; }
+  .theme-toggle .sun { display: none; }
+  :root[data-theme="light"] .theme-toggle .moon { display: none; }
+  :root[data-theme="light"] .theme-toggle .sun { display: block; }
+
+  .nav-cta {
+    font-family: var(--sans); font-size: 13px; font-weight: 600;
+    color: var(--btn-ink); background: var(--accent);
+    padding: 8px 16px; border-radius: 7px; text-decoration: none;
+  }
+  .nav-cta:hover { opacity: 0.88; }
+
+  main { max-width: 900px; margin: 0 auto; padding: 100px 24px 60px; }
+
+  .hero-label { color: var(--accent); font-size: 13px; font-weight: 500; margin-bottom: 20px; }
+
+  h1 {
+    font-family: var(--serif); font-weight: 380;
+    font-size: clamp(42px, 6vw, 72px); line-height: 1.0; letter-spacing: -0.02em;
+    margin: 0 0 26px; max-width: 780px;
+  }
+  h1 em { font-style: italic; color: var(--accent); }
+
+  .lede { color: var(--muted); font-size: 18px; line-height: 1.7; max-width: 560px; margin: 0 0 36px; }
+
+  .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 90px; }
+
+  .btn-primary {
+    font-family: var(--sans); font-size: 14px; font-weight: 600;
+    color: var(--btn-ink); background: var(--accent);
+    padding: 13px 22px; border-radius: 8px; text-decoration: none;
+  }
+  .btn-primary:hover { opacity: 0.88; }
+
+  .btn-secondary {
+    font-family: var(--sans); font-size: 14px; font-weight: 600;
+    color: var(--text); background: transparent; border: 1px solid var(--border);
+    padding: 13px 22px; border-radius: 8px; text-decoration: none;
+  }
+  .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+  .section-label { font-family: var(--serif); font-style: italic; font-size: 15px; color: var(--accent); margin-bottom: 8px; }
+  .section-title { font-family: var(--serif); font-weight: 460; font-size: 28px; margin: 0 0 40px; max-width: 480px; }
+
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; margin-bottom: 96px; }
+
+  .step-num { font-family: var(--mono); color: var(--subtle); font-size: 12px; margin-bottom: 14px; }
+  .step-title { font-family: var(--serif); font-size: 19px; margin: 0 0 8px; }
+  .step-desc { color: var(--muted); font-size: 13.5px; line-height: 1.65; margin: 0; }
+
+  .compare { border-top: 1px solid var(--border); padding-top: 44px; margin-bottom: 90px; }
+
+  .compare-row {
+    display: grid; grid-template-columns: 200px 1fr; gap: 24px;
+    padding: 20px 0; border-bottom: 1px solid var(--border);
+  }
+  .compare-row:last-child { border-bottom: 0; }
+  .compare-term { font-family: var(--serif); font-size: 16px; color: var(--accent); }
+  .compare-desc { color: var(--muted); font-size: 14px; line-height: 1.65; max-width: 480px; }
+
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 24px 40px;
+    display: flex; justify-content: space-between; align-items: center;
+    color: var(--subtle); font-family: var(--mono); font-size: 11px; flex-wrap: wrap; gap: 10px;
+  }
+
+  @media (max-width: 720px) {
+    nav { padding: 0 20px; }
+    main { padding: 72px 20px 40px; }
+    .steps { grid-template-columns: 1fr; gap: 32px; }
+    .compare-row { grid-template-columns: 1fr; gap: 6px; }
+    footer { padding: 20px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="brand">∿ Zero-LLM <em>/ Search</em></div>
+  <div class="nav-right">
+    <button class="theme-toggle" id="themeToggle" aria-label="Toggle light and dark mode" type="button">
+      <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+      <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+    </button>
+    <a class="nav-cta" href="working.html">Open the app</a>
+  </div>
+</nav>
+
+<main>
+
+  <section>
+    <div class="hero-label">Vector retrieval, no generation step</div>
+    <h1>Search by <em>meaning</em>,<br>not keywords.</h1>
+    <p class="lede">
+      Zero-LLM Search embeds your documents into vector space and retrieves
+      by intent. No model rewrites, summarizes, or hallucinates on top of
+      your results — what you get back is what's actually in your data.
+    </p>
+    <div class="hero-actions">
+      <a class="btn-primary" href="working.html">Open the app →</a>
+      <a class="btn-secondary" href="#how-it-works">See how it works</a>
+    </div>
+  </section>
+
+  <section id="how-it-works">
+    <div class="section-label">Process</div>
+    <h2 class="section-title">Three steps, no generation layer anywhere in between.</h2>
+    <div class="steps">
+      <div>
+        <div class="step-num">01</div>
+        <h3 class="step-title">Upload</h3>
+        <p class="step-desc">Drop in a JSON file of documents — each one becomes a searchable record in your knowledge base.</p>
+      </div>
+      <div>
+        <div class="step-num">02</div>
+        <h3 class="step-title">Embed</h3>
+        <p class="step-desc">Every document is converted into a 384-dimension vector with BGE-small-en-v1.5 and indexed in Qdrant.</p>
+      </div>
+      <div>
+        <div class="step-num">03</div>
+        <h3 class="step-title">Retrieve</h3>
+        <p class="step-desc">A query is embedded the same way, then matched by cosine similarity — nothing is generated or reworded.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="compare">
+    <div class="section-label">Why it's different</div>
+    <h2 class="section-title">What "no LLM" actually buys you.</h2>
+
+    <div class="compare-row">
+      <div class="compare-term">Grounded</div>
+      <div class="compare-desc">Every result traces back to a real document in your dataset — there's no generation step that can drift from the source.</div>
+    </div>
+    <div class="compare-row">
+      <div class="compare-term">Fast</div>
+      <div class="compare-desc">A similarity lookup against an indexed vector store returns in milliseconds, without waiting on a model to compose a response.</div>
+    </div>
+    <div class="compare-row">
+      <div class="compare-term">Inspectable</div>
+      <div class="compare-desc">Every hit ships with its similarity score, so you can see exactly how confident the match is rather than trusting a generated summary.</div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <span>BGE-small-en-v1.5 → 384D vectors → Qdrant</span>
+  <span>No LLM generation layer</span>
+</footer>
+
+<script>
+  (function initTheme() {
+    let saved = null;
+    try { saved = localStorage.getItem("zllm-theme"); } catch (e) {}
+    const prefersLight = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches;
+    const theme = saved || (prefersLight ? "light" : "dark");
+    document.documentElement.setAttribute("data-theme", theme);
+  })();
+
+  document.getElementById("themeToggle").addEventListener("click", function () {
+    const current = document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+    const next = current === "light" ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", next);
+    try { localStorage.setItem("zllm-theme", next); } catch (e) {}
+  });
+</script>
+
+</body>
+</html>

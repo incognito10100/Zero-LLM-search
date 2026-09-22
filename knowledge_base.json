@@ -1,0 +1,18 @@
+[
+  {
+    "text": "To secure your API endpoints, always configure JWT authentication middleware to intercept incoming requests and validate the token signature.",
+    "category": "security"
+  },
+  {
+    "text": "OAuth2 authorization code flows with PKCE are highly recommended for single-page applications and mobile apps to securely exchange tokens.",
+    "category": "security"
+  },
+  {
+    "text": "For low-latency API verification, store client API keys in a Redis caching backend with a 5-minute TTL to drastically reduce primary database strain.",
+    "category": "devops"
+  },
+  {
+    "text": "When deploying code, configure an automated CI/CD pipeline inside GitHub Actions to trigger unit testing with the Jest framework on every pull request.",
+    "category": "testing"
+  }
+]
